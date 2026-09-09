@@ -1,0 +1,2354 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>幸運輪盤</title>
+    <style>
+        @import url('https://miaoda.feishu.cn/fonts/css2?family=Quicksand:wght@400;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Quicksand', 'Noto Sans TC', -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #F5F5F7;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .brand-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #F5F5F7;
+            z-index: 0;
+        }
+
+        .brand-bg::before {
+            content: '';
+            position: absolute;
+            top: -20%;
+            right: -10%;
+            width: 60%;
+            height: 70%;
+            background: radial-gradient(ellipse, rgba(66, 133, 244, 0.04) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .brand-bg::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            left: -10%;
+            width: 50%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(234, 67, 53, 0.03) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            padding: 20px;
+        }
+
+        /* ---- 右上角結果卡片 ---- */
+        #resultCard {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(20px) saturate(1.6);
+            -webkit-backdrop-filter: blur(20px) saturate(1.6);
+            border-radius: 24px;
+            padding: 18px 32px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            text-align: center;
+            min-width: 120px;
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            transition: transform 0.2s ease, box-shadow 0.3s ease;
+            touch-action: none;
+        }
+
+        #resultCard:active {
+            cursor: grabbing;
+        }
+
+        #resultCard .result-number {
+            font-size: 2.4rem;
+            font-weight: 600;
+            color: rgba(26, 26, 46, 0.55);
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #resultCard .result-name {
+            font-size: 3.8rem;
+            font-weight: 700;
+            color: #1A1A2E;
+            line-height: 1.15;
+            letter-spacing: -0.5px;
+        }
+
+        #resultCard .result-name.pop {
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: scale(0.2);
+                opacity: 0;
+            }
+            60% {
+                transform: scale(1.08);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        #resultCard.winner-glow {
+            border-color: rgba(251, 188, 5, 0.4);
+            box-shadow: 0 0 40px rgba(251, 188, 5, 0.08), 0 8px 32px rgba(0, 0, 0, 0.04);
+            animation: glowPulse 0.7s ease 2;
+        }
+
+        @keyframes glowPulse {
+            0%,
+            100% {
+                box-shadow: 0 0 40px rgba(251, 188, 5, 0.08), 0 8px 32px rgba(0, 0, 0, 0.04);
+            }
+            50% {
+                box-shadow: 0 0 60px rgba(251, 188, 5, 0.18), 0 8px 32px rgba(0, 0, 0, 0.04);
+            }
+        }
+
+        #resultCard .empty-state {
+            font-size: 1rem;
+            color: rgba(26, 26, 46, 0.55);
+            font-weight: 600;
+        }
+
+        /* ---- 輪盤 ---- */
+        .wheel-wrapper {
+            position: relative;
+            width: min(72vh, 72vw);
+            max-width: 700px;
+            aspect-ratio: 1/1;
+            touch-action: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(12px) saturate(1.3);
+            -webkit-backdrop-filter: blur(12px) saturate(1.3);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            padding: 8px;
+            cursor: grab;
+            will-change: transform;
+        }
+
+        .wheel-wrapper.dragging {
+            cursor: grabbing;
+        }
+
+        #wheelCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: block;
+            touch-action: none;
+            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.02);
+        }
+
+        /* ---- 指針 ---- */
+        .pointer {
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #E8B830;
+            filter: drop-shadow(0 2px 12px rgba(200, 180, 50, 0.3));
+            transition: filter 0.3s ease;
+            pointer-events: none;
+        }
+
+        .pointer::after {
+            content: '';
+            position: absolute;
+            top: -44px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 14px;
+            height: 14px;
+            background: #E8B830;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(200, 180, 50, 0.2);
+        }
+
+        .pointer.pulse {
+            animation: pointerPulse 0.5s ease 2;
+        }
+
+        @keyframes pointerPulse {
+            0%,
+            100% {
+                filter: drop-shadow(0 2px 12px rgba(200, 180, 50, 0.3));
+            }
+            50% {
+                filter: drop-shadow(0 2px 36px rgba(200, 180, 50, 0.7));
+            }
+        }
+
+        /* ---- 抽獎按鈕（Duolingo 款，可拖拽） ---- */
+        #bottomSpinBtn {
+            position: fixed;
+            z-index: 100;
+            width: clamp(180px, 24vw, 240px);
+            height: 60px;
+            border-radius: 16px;
+            border: 2px solid #46a302;
+            background: #58cc02;
+            color: #fff;
+            font-size: clamp(1.05rem, 2.2vh, 1.3rem);
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: grab;
+            box-shadow: 0 5px 0 #46a302;
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #bottomSpinBtn:hover {
+            background: #61e002;
+            box-shadow: 0 5px 0 #58a700;
+            transform: translateY(-1px);
+        }
+
+        #bottomSpinBtn:active {
+            cursor: grabbing;
+            background: #58a700;
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #46a302;
+        }
+
+        #bottomSpinBtn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: translateY(1px);
+        }
+
+        #bottomSpinBtn.reset-mode {
+            background: #1cb0f6;
+            border-color: #1899d6;
+            box-shadow: 0 5px 0 #1899d6;
+        }
+
+        #bottomSpinBtn.reset-mode:hover {
+            background: #43c1f8;
+            box-shadow: 0 5px 0 #1fb1f4;
+        }
+
+        #bottomSpinBtn.reset-mode:active {
+            background: #18a4e3;
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #1899d6;
+        }
+
+        /* ---- 設定按鈕 ---- */
+        #settingsBtn {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            z-index: 100;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: rgba(26, 26, 46, 0.85);
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 14px rgba(0, 0, 0, 0.1);
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #settingsBtn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.05);
+            color: #1A1A2E;
+            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.14);
+        }
+
+        #settingsBtn:active {
+            transform: scale(0.90);
+        }
+
+        /* ---- 通用圓形小按鈕（音效 / 名單 / 全螢幕） ---- */
+        .icon-btn {
+            position: fixed;
+            z-index: 100;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: rgba(26, 26, 46, 0.85);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 14px rgba(0, 0, 0, 0.1);
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.05);
+            color: #1A1A2E;
+            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.14);
+        }
+
+        .icon-btn:active {
+            transform: scale(0.90);
+        }
+
+        .icon-btn.active {
+            background: rgba(255, 255, 255, 1);
+            color: #1A1A2E;
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.25);
+        }
+
+        #soundBtn {
+            bottom: 96px;
+            right: 32px;
+        }
+
+        #soundBtn.muted {
+            opacity: 0.55;
+        }
+
+        #listBtn {
+	    display: none;
+            bottom: 32px;
+            left: 32px;
+        }
+
+        #fullscreenBtn {
+            top: 24px;
+            left: 24px;
+        }
+
+        /* ---- 已抽中名單面板 ---- */
+        #drawnPanel {
+            position: fixed;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 200;
+            width: 236px;
+            max-height: 62vh;
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px) saturate(1.4);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+            padding: 16px;
+            display: none;
+        }
+
+        #drawnPanel.active {
+            display: block;
+            animation: slideInRight 0.25s ease;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-14px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+        #drawnPanel .panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            color: #1A1A2E;
+            font-size: 0.95rem;
+            margin-bottom: 10px;
+        }
+
+        #drawnPanel .badge {
+            background: #4285F4;
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #drawnList {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+
+        .chip {
+            background: rgba(66, 133, 244, 0.1);
+            color: #1A1A2E;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+
+        .chip .n {
+            color: #4285F4;
+            font-weight: 600;
+            margin-right: 3px;
+        }
+
+        .panel-foot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            color: rgba(26, 26, 46, 0.45);
+            font-size: 0.75rem;
+        }
+
+        .panel-foot b {
+            color: #1A1A2E;
+        }
+
+        .mini-btn {
+            background: rgba(66, 133, 244, 0.08);
+            border: none;
+            color: #4285F4;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-left: 4px;
+        }
+
+        .mini-btn.danger {
+            color: #EA4335;
+            background: rgba(234, 67, 53, 0.06);
+        }
+
+        .mini-btn:hover {
+            filter: brightness(0.96);
+        }
+
+        .mini-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ---- 彩紙層 ---- */
+        #confettiCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9000;
+            pointer-events: none;
+        }
+
+        /* ---- 彈窗 ---- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .modal-box {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(32px) saturate(1.6);
+            -webkit-backdrop-filter: blur(32px) saturate(1.6);
+            border-radius: 28px;
+            padding: 32px 40px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
+            animation: slideUp 0.3s cubic-bezier(0.2, 0, 0, 1);
+            overflow-y: auto;
+        }
+
+        @keyframes slideUp {
+            0% {
+                transform: translateY(20px) scale(0.97);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-box h2 {
+            color: #1A1A2E;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+            letter-spacing: -0.3px;
+        }
+
+        .modal-box .sub {
+            color: rgba(26, 26, 46, 0.75);
+            font-size: 0.95rem;
+            margin-bottom: 16px;
+        }
+
+        .modal-box textarea {
+            width: 100%;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 14px;
+            color: #1A1A2E;
+            font-size: 1.05rem;
+            padding: 14px 16px;
+            font-family: inherit;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s ease;
+            line-height: 1.8;
+        }
+
+        .modal-box textarea:focus {
+            border-color: rgba(66, 133, 244, 0.45);
+        }
+
+        .modal-box textarea::placeholder {
+            color: rgba(26, 26, 46, 0.45);
+        }
+
+        .modal-box .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            color: rgba(26, 26, 46, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .modal-box .info-row .count {
+            color: #4285F4;
+            font-weight: 600;
+        }
+
+        .modal-box .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            justify-content: flex-end;
+        }
+
+        .modal-box .btn-row button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: inherit;
+            touch-action: manipulation;
+        }
+
+        .modal-box .btn-row .btn-cancel {
+            background: rgba(0, 0, 0, 0.05);
+            color: rgba(26, 26, 46, 0.7);
+        }
+
+        .modal-box .btn-row .btn-cancel:hover {
+            background: rgba(0, 0, 0, 0.09);
+        }
+
+        .modal-box .btn-row .btn-save {
+            background: linear-gradient(145deg, #4285F4, #3367D6);
+            color: white;
+            box-shadow: 0 4px 16px rgba(66, 133, 244, 0.15);
+        }
+
+        .modal-box .btn-row .btn-save:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 24px rgba(66, 133, 244, 0.2);
+        }
+
+        .modal-box .btn-row .btn-save:active {
+            transform: scale(0.96);
+        }
+
+        /* ---- 設定開關 ---- */
+        .settings-block {
+            margin-top: 14px;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            padding-top: 10px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            color: #1A1A2E;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.14);
+            border-radius: 20px;
+            transition: background 0.2s ease;
+            cursor: pointer;
+        }
+
+        .slider::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s ease;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .switch input:checked + .slider {
+            background: #4285F4;
+        }
+
+        .switch input:checked + .slider::before {
+            transform: translateX(18px);
+        }
+
+        /* ---- 全部完成 ---- */
+        .complete-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 40;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 32px;
+            padding: 28px 40px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            display: none;
+            pointer-events: none;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04);
+        }
+
+        .complete-overlay.active {
+            display: block;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .complete-overlay .emoji {
+            font-size: 3.2rem;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .complete-overlay .msg {
+            color: #1A1A2E;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .complete-overlay .sub-msg {
+            color: rgba(26, 26, 46, 0.6);
+            font-size: 0.8rem;
+            margin-top: 2px;
+        }
+
+        .modal-box::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .modal-box::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .modal-box::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 10px;
+        }
+
+        /* ---- 響應式 ---- */
+        @media (max-width: 600px) {
+            #resultCard {
+                top: 14px;
+                right: 14px;
+                padding: 10px 16px;
+                min-width: 80px;
+                min-height: 54px;
+                border-radius: 18px;
+            }
+            #resultCard .result-number {
+                font-size: 1.4rem;
+            }
+            #resultCard .result-name {
+                font-size: 2.2rem;
+            }
+            .modal-box {
+                padding: 20px 18px;
+            }
+            #settingsBtn {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+                bottom: 22px;
+                right: 22px;
+            }
+            #bottomSpinBtn {
+                width: 150px;
+                height: 50px;
+                font-size: 1rem;
+            }
+            .pointer {
+                top: -2px;
+                border-left-width: 14px;
+                border-right-width: 14px;
+                border-top-width: 30px;
+            }
+            .pointer::after {
+                top: -34px;
+                width: 10px;
+                height: 10px;
+            }
+            .wheel-wrapper {
+                padding: 6px;
+            }
+            .complete-overlay {
+                padding: 18px 24px;
+            }
+            .complete-overlay .emoji {
+                font-size: 2.4rem;
+            }
+            .complete-overlay .msg {
+                font-size: 1.1rem;
+            }
+            #soundBtn {
+                bottom: 76px;
+                right: 22px;
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+            #listBtn {
+                bottom: 22px;
+                left: 22px;
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+            #fullscreenBtn {
+                top: 14px;
+                left: 14px;
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+            #drawnPanel {
+                left: 10px;
+                width: 196px;
+                padding: 12px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            #resultCard .result-name {
+                font-size: 1.6rem;
+            }
+            #resultCard .result-number {
+                font-size: 1rem;
+            }
+            #resultCard {
+                padding: 6px 12px;
+                min-width: 60px;
+                min-height: 40px;
+            }
+            .modal-box {
+                padding: 16px 12px;
+            }
+            .pointer {
+                border-left-width: 10px;
+                border-right-width: 10px;
+                border-top-width: 22px;
+                top: 0px;
+            }
+            .pointer::after {
+                top: -26px;
+                width: 8px;
+                height: 8px;
+            }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            .wheel-wrapper {
+                width: min(55vh, 50vw);
+                padding: 4px;
+            }
+            #resultCard .result-name {
+                font-size: 2.2rem;
+            }
+            #resultCard .result-number {
+                font-size: 1.4rem;
+            }
+            #resultCard {
+                padding: 8px 14px;
+                min-width: 80px;
+                min-height: 50px;
+            }
+            #bottomSpinBtn {
+                width: 140px;
+                height: 46px;
+                font-size: 0.95rem;
+            }
+            #settingsBtn {
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+                bottom: 18px;
+                right: 18px;
+            }
+            .pointer {
+                border-left-width: 12px;
+                border-right-width: 12px;
+                border-top-width: 26px;
+                top: -2px;
+            }
+            .pointer::after {
+                top: -30px;
+                width: 10px;
+                height: 10px;
+            }
+            #soundBtn {
+                bottom: 66px;
+                right: 18px;
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+            #listBtn {
+                bottom: 18px;
+                left: 18px;
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+            #fullscreenBtn {
+                top: 18px;
+                left: 18px;
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+            #drawnPanel {
+                width: 190px;
+                left: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="brand-bg"></div>
+
+    <!-- 右上角結果卡片 -->
+    <div id="resultCard">
+        <div class="empty-state"> ———</div>
+    </div>
+
+    <!-- 輪盤 -->
+    <div class="app-container">
+        <div class="wheel-wrapper">
+            <canvas id="wheelCanvas" width="800" height="800"></canvas>
+            <div class="pointer" id="pointer"></div>
+            <div class="complete-overlay" id="completeOverlay">
+                <span class="emoji">🎉</span>
+                <div class="msg">全部完成！</div>
+                <div class="sub-msg">所有同學都已經被抽中了</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 抽獎按鈕（Duolingo 款，可拖拽） -->
+    <button id="bottomSpinBtn">開始</button>
+
+    <!-- 功能按鈕 -->
+    <button class="icon-btn" id="soundBtn" aria-label="音效開關">🔊</button>
+    <button class="icon-btn" id="listBtn" aria-label="已抽中名單">📋</button>
+    <button class="icon-btn" id="fullscreenBtn" aria-label="全螢幕">⛶</button>
+    <button id="settingsBtn">⚙️</button>
+
+    <!-- 已抽中名單面板 -->
+    <div id="drawnPanel">
+        <div class="panel-head">已抽中 <span class="badge" id="drawnCount">0/0</span></div>
+        <div id="drawnList"></div>
+        <div class="panel-foot">
+            <span>剩餘 <b id="remainingCount">0</b> 位</span>
+            <span>
+                <button class="mini-btn" id="undoBtn">↩ 復原</button>
+                <button class="mini-btn danger" id="clearBtn">✕ 清空</button>
+            </span>
+        </div>
+    </div>
+
+    <!-- 彩紙層 -->
+    <canvas id="confettiCanvas"></canvas>
+
+    <!-- 設定彈窗 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-box">
+            <h2>✏️ 編輯名單</h2>
+            <div class="sub">每行一位學生，格式「1. 名字」或 「名字」</div>
+            <textarea id="studentInput" placeholder="例如：&#10;1. 陳小文&#10;2. 張子豪&#10;李小美&#10;4. 王大明"></textarea>
+            <div class="info-row">
+                <span>👥 共 <span class="count" id="previewCount">0</span> 位學生</span>
+            </div>
+            <div class="settings-block">
+                <div class="setting-row"><span>🔁 允許重複抽中</span><label class="switch"><input type="checkbox" id="setRepeat"><span class="slider"></span></label></div>
+            </div>
+            <div class="btn-row">
+                <button class="btn-cancel" id="modalCancel">取消</button>
+                <button class="btn-save" id="modalSave">✓ 儲存</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ============================================================
+//  幸運輪盤
+//  - 輪盤只顯示編號；停止後指針精確對準扇形正中
+//  - 結果卡片顯示「#編號 + 名字」，與輪盤指向一致
+//  - 音效改良：木魚式咔嗒（三角波+短噪音）、音高/音量隨速度、
+//    每經過一個扇形邊界響一聲、勝利琶音、開始「咻」聲、可靜音
+//  - 課堂功能：已抽中名單面板（復原/清空）、中獎扇形金圈、
+//    彩紙效果、全螢幕、允許重複抽中
+// ============================================================
+
+(function () {
+    'use strict';
+
+    // ---- DOM 引用 ----
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('bottomSpinBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const resultCard = document.getElementById('resultCard');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const studentInput = document.getElementById('studentInput');
+    const previewCount = document.getElementById('previewCount');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalSave = document.getElementById('modalSave');
+    const pointerEl = document.getElementById('pointer');
+    const completeOverlay = document.getElementById('completeOverlay');
+    const soundBtn = document.getElementById('soundBtn');
+    const listBtn = document.getElementById('listBtn');
+    const drawnPanel = document.getElementById('drawnPanel');
+    const drawnList = document.getElementById('drawnList');
+    const drawnCountEl = document.getElementById('drawnCount');
+    const remainingCountEl = document.getElementById('remainingCount');
+    const undoBtn = document.getElementById('undoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const cctx = confettiCanvas.getContext('2d');
+    const setRepeat = document.getElementById('setRepeat');
+
+    // ---- 狀態 ----
+    let students = [];
+    let drawnHistory = [];
+    let isSpinning = false;
+    let currentRotation = 0;
+    let animFrameId = null;
+    let isAllDone = false;
+    let highlightIdx = -1;
+    let lastTickIdx = -1;
+
+    // ---- 設定（localStorage 記住） ----
+    function loadBool(key, def) {
+        try {
+            const v = localStorage.getItem(key);
+            return v === null ? def : v === 'true';
+        } catch (e) { return def; }
+    }
+    let soundEnabled = loadBool('wheel_sound', true);
+    let repeatAllowed = loadBool('wheel_repeat', false);
+
+    // ---- Google 品牌柔和色 ----
+    const COLORS = [
+        '#4285F4', '#EA4335', '#FBBC05', '#34A853',
+        '#4285F4', '#EA4335', '#FBBC05', '#34A853',
+        '#4285F4', '#EA4335', '#FBBC05', '#34A853',
+        '#4285F4', '#EA4335', '#FBBC05', '#34A853'
+    ];
+    let colorMap = [];
+
+    function generateColorMap(count) {
+        colorMap = [];
+        for (let i = 0; i < count; i++) {
+            colorMap.push(COLORS[i % COLORS.length]);
+        }
+    }
+
+    // ============================================================
+    //  音效系統（改良）
+    // ============================================================
+    let audioCtx = null;
+    let masterGain = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return;
+                audioCtx = new AC();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = soundEnabled ? 0.9 : 0;
+                masterGain.connect(audioCtx.destination);
+            } catch (e) {
+                audioCtx = null;
+            }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(function () {});
+        }
+    }
+
+    function playTone(freq, opts) {
+        if (!soundEnabled) return;
+        try {
+            initAudio();
+            if (!audioCtx || !masterGain) return;
+            const o = opts || {};
+            const duration = o.duration || 0.1;
+            const type = o.type || 'sine';
+            const volume = o.volume != null ? o.volume : 0.2;
+            const delay = o.delay || 0;
+            const freqEnd = o.freqEnd || null;
+            const t0 = audioCtx.currentTime + delay;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(Math.max(1, freq), t0);
+            if (freqEnd) {
+                osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + duration);
+            }
+            gain.gain.setValueAtTime(0.0001, t0);
+            gain.gain.exponentialRampToValueAtTime(Math.max(0.001, volume), t0 + 0.008);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start(t0);
+            osc.stop(t0 + duration + 0.05);
+        } catch (e) {}
+    }
+
+    function playNoiseBurst(volume, duration, filterFreq) {
+        if (!soundEnabled) return;
+        try {
+            initAudio();
+            if (!audioCtx || !masterGain) return;
+            const t0 = audioCtx.currentTime;
+            const len = Math.max(1, Math.floor(audioCtx.sampleRate * (duration || 0.02)));
+            const buffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < len; i++) {
+                data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+            }
+            const src = audioCtx.createBufferSource();
+            src.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = filterFreq || 1500;
+            const g = audioCtx.createGain();
+            g.gain.value = Math.max(0.001, volume);
+            src.connect(filter);
+            filter.connect(g);
+            g.connect(masterGain);
+            src.start(t0);
+        } catch (e) {}
+    }
+
+    // 木魚式「咔嗒」：主音（音高隨速度）+ 短噪音（真實敲擊感）
+    function playTick(speed) {
+        if (!soundEnabled) return;
+        const sp = Math.max(0, speed);
+        const pitch = 380 + Math.min(1000, sp * 14000);
+        const vol = Math.min(0.3, 0.05 + sp * 3);
+        playTone(pitch, { duration: 0.028, type: 'triangle', volume: vol });
+        playNoiseBurst(vol * 0.45, 0.02, 1800);
+    }
+
+    function playClickSound() {
+        playTone(660, { duration: 0.05, type: 'sine', volume: 0.12 });
+        playTone(990, { duration: 0.04, type: 'sine', volume: 0.08, delay: 0.035 });
+    }
+
+    // 開始旋轉的柔和「咻」聲
+    function playWhoosh() {
+        playTone(150, { duration: 0.55, type: 'sine', volume: 0.06, freqEnd: 650 });
+    }
+
+    // 勝利琶音：C5 → E5 → G5 → C6 → E6
+    function playWinSound() {
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+        const times = [0, 0.09, 0.18, 0.28, 0.46];
+        const durs = [0.12, 0.12, 0.14, 0.2, 0.55];
+        notes.forEach(function (f, i) {
+            playTone(f, { duration: durs[i], type: 'triangle', volume: i === 4 ? 0.2 : 0.17, delay: times[i] });
+        });
+        playTone(1568, { duration: 0.35, type: 'sine', volume: 0.07, delay: 0.5 });
+    }
+
+    function playCompleteSound() {
+        [523.25, 659.25, 783.99].forEach(function (f, i) {
+            playTone(f, { duration: 0.28, type: 'triangle', volume: 0.16, delay: i * 0.09 });
+        });
+    }
+
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        try { localStorage.setItem('wheel_sound', String(soundEnabled)); } catch (e) {}
+        if (masterGain) masterGain.gain.value = soundEnabled ? 0.9 : 0;
+        soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+        soundBtn.classList.toggle('muted', !soundEnabled);
+        if (!soundEnabled) {
+            // 靜音時立即停止正在朗讀的名字
+            try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+        }
+        if (soundEnabled) playClickSound();
+    }
+
+    // ============================================================
+    //  TTS 朗讀
+    // ============================================================
+    function speakName(name) {
+        if (!soundEnabled) return;
+        try {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(name);
+            const voices = window.speechSynthesis.getVoices();
+            const text = (name || '').trim();
+            const hasCJK = /[\u3400-\u9FFF]/.test(text);
+            const hasLatin = /[A-Za-z]/.test(text);
+
+            if (hasLatin && !hasCJK) {
+                // 英文名字 → 英國女聲
+                u.lang = 'en-GB';
+                u.rate = 0.85;
+                u.pitch = 1.05;
+                const enVoice = voices.find(function (v) {
+                    return /en[-_]GB/i.test(v.lang) && /female|sonia|libby|emma|harriet|martha/i.test(v.name);
+                }) ||
+                    voices.find(function (v) { return /en[-_]GB/i.test(v.lang); }) ||
+                    voices.find(function (v) {
+                        return /^en[-_]US/i.test(v.lang) && /female|zira|jenny|aria|ava|michelle/i.test(v.name);
+                    }) ||
+                    voices.find(function (v) { return /^en/i.test(v.lang); }) || null;
+                if (enVoice) u.voice = enVoice;
+            } else {
+                // 中文名字 → 粵語/中文女聲
+                u.lang = 'zh-HK';
+                u.rate = 0.8;
+                u.pitch = 1.0;
+                const zhVoice = voices.find(function (v) { return v.lang === 'zh-HK'; }) ||
+                    voices.find(function (v) { return v.lang && v.lang.indexOf('zh') === 0; }) || null;
+                if (zhVoice) u.voice = zhVoice;
+            }
+            window.speechSynthesis.speak(u);
+        } catch (e) {}
+    }
+
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = function () {
+            window.speechSynthesis.getVoices();
+        };
+    }
+
+    // ============================================================
+    //  localStorage
+    // ============================================================
+    function saveToStorage() {
+        try {
+            localStorage.setItem('wheel_students', JSON.stringify(students));
+            localStorage.setItem('wheel_drawn', JSON.stringify(drawnHistory));
+        } catch (e) {}
+    }
+
+    function loadFromStorage() {
+        try {
+            const s = localStorage.getItem('wheel_students');
+            const d = localStorage.getItem('wheel_drawn');
+            if (s) {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    students = parsed;
+                    drawnHistory = d ? JSON.parse(d) : [];
+                    drawnHistory = drawnHistory.filter(function (idx) { return idx < students.length; });
+                    return true;
+                }
+            }
+            return false;
+        } catch (e) { return false; }
+    }
+
+    function saveBtnPosition(left, top) {
+        try {
+            localStorage.setItem('wheel_btn_left', left);
+            localStorage.setItem('wheel_btn_top', top);
+        } catch (e) {}
+    }
+
+    function loadBtnPosition() {
+        try {
+            const left = localStorage.getItem('wheel_btn_left');
+            const top = localStorage.getItem('wheel_btn_top');
+            if (left !== null && top !== null) {
+                return { left: parseFloat(left), top: parseFloat(top) };
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // ============================================================
+    //  繪製輪盤（只顯示編號）
+    // ============================================================
+    function drawWheel(rotation, hlIdx) {
+        highlightIdx = (hlIdx === undefined) ? -1 : hlIdx;
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const radius = Math.min(w, h) * 0.44;
+        const totalCount = students.length;
+
+        ctx.clearRect(0, 0, w, h);
+
+        if (totalCount === 0) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.02)';
+            ctx.fill();
+            ctx.fillStyle = 'rgba(26,26,46,0.15)';
+            ctx.font = '24px Quicksand, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('📝', cx, cy);
+            return;
+        }
+
+        const angleStep = (Math.PI * 2) / totalCount;
+
+        for (let i = 0; i < totalCount; i++) {
+            const startAngle = rotation + i * angleStep;
+            const endAngle = startAngle + angleStep;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, endAngle);
+            ctx.closePath();
+
+            ctx.fillStyle = colorMap[i] || COLORS[i % COLORS.length];
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const midAngle = startAngle + angleStep / 2;
+            const textRadius = radius * 0.72;
+            const tx = cx + Math.cos(midAngle) * textRadius;
+            const ty = cy + Math.sin(midAngle) * textRadius;
+
+            // 輪盤只顯示編號，與學生資料一一對應
+            const label = String(students[i].id);
+
+            let fontSize;
+            if (totalCount <= 6) fontSize = 40;
+            else if (totalCount <= 12) fontSize = 32;
+            else if (totalCount <= 18) fontSize = 26;
+            else if (totalCount <= 24) fontSize = 22;
+            else if (totalCount <= 32) fontSize = 18;
+            else if (totalCount <= 40) fontSize = 15;
+            else if (totalCount <= 48) fontSize = 12;
+            else fontSize = 10;
+
+            ctx.save();
+            ctx.translate(tx, ty);
+            const rot = midAngle + (midAngle > Math.PI / 2 ? Math.PI : 0);
+            ctx.rotate(rot);
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold ' + fontSize + 'px Quicksand, "Noto Sans TC", sans-serif';
+
+            ctx.shadowColor = 'rgba(0,0,0,0.15)';
+            ctx.shadowBlur = 4;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(label, 0, 0);
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+            ctx.lineWidth = 1;
+            ctx.strokeText(label, 0, 0);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(label, 0, 0);
+
+            ctx.restore();
+        }
+
+        // 中獎扇形金色高亮
+        if (highlightIdx >= 0 && highlightIdx < totalCount) {
+            const sa = rotation + highlightIdx * angleStep;
+            const ea = sa + angleStep;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius + 5, sa, ea);
+            ctx.closePath();
+            ctx.strokeStyle = 'rgba(255,210,60,0.95)';
+            ctx.lineWidth = 7;
+            ctx.shadowColor = 'rgba(255,190,0,0.75)';
+            ctx.shadowBlur = 20;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.12);
+        grad.addColorStop(0, 'rgba(255,255,255,0.15)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.02)');
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.12, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+    }
+
+    // ---- 獲取指針指向的扇形索引 ----
+    // 指針固定在正上方（-PI/2），依 rotation 反算當前扇形
+    function getWinningIndex(rotation) {
+        const totalCount = students.length;
+        if (totalCount === 0) return -1;
+        const angleStep = (Math.PI * 2) / totalCount;
+        const pointerAngle = -Math.PI / 2;
+        let raw = (pointerAngle - rotation) % (Math.PI * 2);
+        if (raw < 0) raw += Math.PI * 2;
+        const idx = Math.floor(raw / angleStep);
+        return Math.min(idx, totalCount - 1);
+    }
+    // ============================================================
+    //  彩紙效果
+    // ============================================================
+    function resizeConfetti() {
+        confettiCanvas.width = window.innerWidth;
+        confettiCanvas.height = window.innerHeight;
+    }
+    resizeConfetti();
+    window.addEventListener('resize', resizeConfetti);
+
+    let confettiParts = [];
+    let confettiRAF = null;
+
+    function launchConfetti() {
+        const colors = ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#FFFFFF'];
+        confettiParts = [];
+        for (let i = 0; i < 120; i++) {
+            confettiParts.push({
+                x: Math.random() * confettiCanvas.width,
+                y: -20 - Math.random() * confettiCanvas.height * 0.5,
+                w: 6 + Math.random() * 8,
+                h: 8 + Math.random() * 10,
+                vx: (Math.random() - 0.5) * 3,
+                vy: 1.5 + Math.random() * 4,
+                rot: Math.random() * Math.PI * 2,
+                vr: (Math.random() - 0.5) * 0.3,
+                color: colors[Math.floor(Math.random() * colors.length)]
+            });
+        }
+        if (!confettiRAF) confettiLoop();
+    }
+
+    function confettiLoop() {
+        cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        let alive = false;
+        for (let i = 0; i < confettiParts.length; i++) {
+            const p = confettiParts[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.03;
+            p.rot += p.vr;
+            if (p.y < confettiCanvas.height + 40) alive = true;
+            cctx.save();
+            cctx.translate(p.x, p.y);
+            cctx.rotate(p.rot);
+            cctx.globalAlpha = Math.max(0, 1 - (p.y / confettiCanvas.height) * 1.1);
+            cctx.fillStyle = p.color;
+            cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            cctx.restore();
+        }
+        cctx.globalAlpha = 1;
+        if (alive) {
+            confettiRAF = requestAnimationFrame(confettiLoop);
+        } else {
+            confettiRAF = null;
+            cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        }
+    }
+
+    // ============================================================
+    //  已抽中名單面板
+    // ============================================================
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function updateDrawnPanel() {
+        if (!students.length) {
+            drawnCountEl.textContent = '0/0';
+            remainingCountEl.textContent = '0';
+            drawnList.innerHTML = '<div style="color:rgba(26,26,46,0.55);font-size:.75rem;">尚未抽中任何人</div>';
+            return;
+        }
+        drawnCountEl.textContent = drawnHistory.length + '/' + students.length;
+        remainingCountEl.textContent = Math.max(0, students.length - drawnHistory.length);
+        if (drawnHistory.length === 0) {
+            drawnList.innerHTML = '<div style="color:rgba(26,26,46,0.55);font-size:.75rem;">尚未抽中任何人</div>';
+        } else {
+            drawnList.innerHTML = drawnHistory.map(function (idx) {
+                const s = students[idx];
+                return '<span class="chip"><span class="n">#' + s.id + '</span>' + escapeHtml(s.name) + '</span>';
+            }).join('');
+        }
+    }
+
+    function togglePanel() {
+        drawnPanel.classList.toggle('active');
+        listBtn.classList.toggle('active', drawnPanel.classList.contains('active'));
+    }
+
+    function undoLastDraw() {
+        if (isSpinning) return;
+        if (drawnHistory.length === 0) return;
+        drawnHistory.pop();
+        isAllDone = false;
+        completeOverlay.classList.remove('active');
+        spinBtn.classList.remove('reset-mode');
+        spinBtn.textContent = '開始';
+        highlightIdx = -1;
+        saveToStorage();
+        updateDrawnPanel();
+        drawWheel(currentRotation);
+        playClickSound();
+    }
+
+    function clearDrawn() {
+        if (isSpinning) return;
+        if (drawnHistory.length === 0) return;
+        drawnHistory = [];
+        isAllDone = false;
+        completeOverlay.classList.remove('active');
+        spinBtn.classList.remove('reset-mode');
+        spinBtn.textContent = '開始';
+        highlightIdx = -1;
+        saveToStorage();
+        updateDrawnPanel();
+        drawWheel(currentRotation);
+        playClickSound();
+    }
+
+    // ============================================================
+    //  抽獎（方案 A：精確旋轉到目標扇形正中）
+    // ============================================================
+    function performSpin() {
+        if (isSpinning) return;
+        if (students.length === 0) { openEditor(); return; }
+        if (isAllDone) { resetAll(); return; }
+
+        let availIndices;
+        if (repeatAllowed) {
+            availIndices = students.map(function (_, i) { return i; });
+        } else {
+            availIndices = students.map(function (_, i) { return i; })
+                .filter(function (i) { return drawnHistory.indexOf(i) === -1; });
+            if (availIndices.length === 0) {
+                isAllDone = true;
+                completeOverlay.classList.add('active');
+                spinBtn.classList.add('reset-mode');
+                spinBtn.textContent = '重置';
+                playCompleteSound();
+                return;
+            }
+        }
+
+        initAudio();
+
+        isSpinning = true;
+        spinBtn.disabled = true;
+        spinBtn.style.opacity = '0.6';
+        pointerEl.classList.remove('pulse');
+        completeOverlay.classList.remove('active');
+
+        // 清除結果卡片舊內容
+        const oldEmpty = resultCard.querySelector('.empty-state');
+        if (oldEmpty) oldEmpty.remove();
+        const oldName = resultCard.querySelector('.result-name');
+        if (oldName) oldName.remove();
+        const oldNum = resultCard.querySelector('.result-number');
+        if (oldNum) oldNum.remove();
+
+        playClickSound();
+        setTimeout(playWhoosh, 120);
+
+        // 從可抽名單中隨機選一個
+        const targetIdx = availIndices[Math.floor(Math.random() * availIndices.length)];
+        const totalCount = students.length;
+        const angleStep = (Math.PI * 2) / totalCount;
+
+        // 指針固定在正上方（-PI/2）。
+        // 扇形 i 中心角度 = rotation + i*angleStep + angleStep/2，
+        // 令其等於 -PI/2 即得目標 rotation（無隨機偏移 → 精確對準正中）：
+        const targetAngle = -Math.PI / 2 - targetIdx * angleStep - angleStep / 2;
+
+        currentRotation = 0;
+        // 圈數必須是整數：若用小數，停點會偏離目標扇形，
+        // 造成「指針指向 A、高亮/卡片顯示 B」的不一致
+        const extraSpins = 10 + Math.floor(Math.random() * 5);
+        const finalAngle = targetAngle + extraSpins * Math.PI * 2;
+
+        const startRotation = 0;
+        const totalRotation = finalAngle;
+        const duration = 4800 + Math.random() * 800;
+        const startTime = performance.now();
+
+        lastTickIdx = getWinningIndex(startRotation);
+
+        let prevAngle = startRotation;
+        let prevTime = startTime;
+
+        function animateSpin(time) {
+            const elapsed = time - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // easeOutQuint
+            const eased = 1 - Math.pow(1 - progress, 4.5);
+            const currentAngle = startRotation + totalRotation * eased;
+
+            currentRotation = currentAngle;
+            drawWheel(currentAngle);
+
+            // 速度（rad/ms）
+            const deltaAngle = Math.abs(currentAngle - prevAngle);
+            const deltaTime = Math.max(1, time - prevTime);
+            const speed = deltaAngle / deltaTime;
+
+            // 每經過一個扇形邊界 → 木魚式咔嗒（音高隨速度）
+            const idxNow = getWinningIndex(currentAngle);
+            if (idxNow !== lastTickIdx) {
+                playTick(speed);
+                lastTickIdx = idxNow;
+            }
+
+            prevAngle = currentAngle;
+            prevTime = time;
+
+            if (progress < 1) {
+                animFrameId = requestAnimationFrame(animateSpin);
+            } else {
+                // ---- 旋轉完成：強制精確歸位到 targetIdx 扇形正中 ----
+                // extraSpins 為整數 → totalRotation mod 2π == targetAngle mod 2π，
+                // 指針、金圈高亮、結果卡片三者必然指向同一扇形
+                currentRotation = totalRotation;
+                drawWheel(currentRotation, targetIdx);
+
+                const finalWinIdx = targetIdx;
+
+                const student = students[finalWinIdx];
+
+                if (drawnHistory.indexOf(finalWinIdx) === -1) {
+                    drawnHistory.push(finalWinIdx);
+                    saveToStorage();
+                }
+
+                // 金圈高亮 + 結果卡片（#編號 + 名字）+ 音效 + 彩紙
+                drawWheel(currentRotation, finalWinIdx);
+                showResult(student);
+                playWinSound();
+                launchConfetti();
+                pointerEl.classList.add('pulse');
+                updateDrawnPanel();
+
+                setTimeout(function () { speakName(student.name); }, 350);
+
+                if (!repeatAllowed) {
+                    const remaining = students.filter(function (_, i) {
+                        return drawnHistory.indexOf(i) === -1;
+                    }).length;
+                    if (remaining === 0) {
+                        isAllDone = true;
+                        completeOverlay.classList.add('active');
+                        spinBtn.classList.add('reset-mode');
+                        spinBtn.textContent = '重置';
+                        playCompleteSound();
+                    } else {
+                        spinBtn.textContent = '開始';
+                    }
+                } else {
+                    spinBtn.textContent = '開始';
+                }
+
+                spinBtn.disabled = false;
+                spinBtn.style.opacity = '1';
+                isSpinning = false;
+
+                setTimeout(function () { pointerEl.classList.remove('pulse'); }, 1000);
+            }
+        }
+
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        animFrameId = requestAnimationFrame(animateSpin);
+    }
+
+    // ---- 顯示結果（#編號 + 名字，與輪盤指向一致） ----
+    function showResult(student) {
+        resultCard.innerHTML = '';
+
+        const numDiv = document.createElement('div');
+        numDiv.className = 'result-number';
+        numDiv.textContent = '#' + student.id;
+        resultCard.appendChild(numDiv);
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'result-name pop';
+        nameDiv.textContent = student.name;
+        resultCard.appendChild(nameDiv);
+
+        resultCard.classList.remove('winner-glow');
+        void resultCard.offsetWidth;
+        resultCard.classList.add('winner-glow');
+    }
+
+    // ---- 重置 ----
+    function resetAll() {
+        if (isSpinning) return;
+        try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+
+        drawnHistory = [];
+        isAllDone = false;
+        currentRotation = 0;
+        highlightIdx = -1;
+        completeOverlay.classList.remove('active');
+        spinBtn.classList.remove('reset-mode');
+        spinBtn.textContent = '開始';
+        spinBtn.disabled = false;
+        spinBtn.style.opacity = '1';
+        pointerEl.classList.remove('pulse');
+
+        resultCard.innerHTML = '<div class="empty-state"> ———</div>';
+        resultCard.classList.remove('winner-glow');
+
+        updateDrawnPanel();
+        drawWheel(0);
+        saveToStorage();
+    }
+
+    // ---- 編輯名單 ----
+    function openEditor() {
+        if (isSpinning) return;
+        try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+
+        const lines = students.map(function (s) { return s.id + '. ' + s.name; });
+        studentInput.value = lines.join('\n');
+        updatePreviewCount();
+        setRepeat.checked = repeatAllowed;
+        modalOverlay.classList.add('active');
+    }
+
+    function closeEditor() {
+        modalOverlay.classList.remove('active');
+    }
+
+    function updatePreviewCount() {
+        const text = studentInput.value;
+        const lines = text.split('\n').filter(function (line) { return line.trim() !== ''; });
+        previewCount.textContent = lines.length;
+    }
+
+    function saveStudentList() {
+        const text = studentInput.value;
+        const lines = text.split('\n').filter(function (line) { return line.trim() !== ''; });
+        if (lines.length === 0) {
+            alert('請至少輸入一位學生');
+            return;
+        }
+
+        const newStudents = [];
+        let maxId = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            const match = trimmed.match(/^(\d+)\.\s*(.+)$/);
+            if (match) {
+                const id = parseInt(match[1], 10);
+                const name = match[2].trim();
+                if (name) {
+                    newStudents.push({ id: id, name: name });
+                    if (id > maxId) maxId = id;
+                }
+            } else {
+                maxId += 1;
+                newStudents.push({ id: maxId, name: trimmed });
+            }
+        }
+
+        if (newStudents.length === 0) {
+            alert('無法解析任何學生，請檢查格式');
+            return;
+        }
+
+        const ids = newStudents.map(function (s) { return s.id; });
+        const uniqueIds = new Set(ids);
+        if (ids.length !== uniqueIds.size) {
+            alert('發現重複的編號，請檢查後再試');
+            return;
+        }
+
+        students = newStudents;
+        generateColorMap(students.length);
+        drawnHistory = [];
+        isAllDone = false;
+        currentRotation = 0;
+        highlightIdx = -1;
+        spinBtn.classList.remove('reset-mode');
+        spinBtn.textContent = '開始';
+        spinBtn.disabled = false;
+        spinBtn.style.opacity = '1';
+        pointerEl.classList.remove('pulse');
+        completeOverlay.classList.remove('active');
+        resultCard.innerHTML = '<div class="empty-state"> ———</div>';
+        resultCard.classList.remove('winner-glow');
+
+        updateDrawnPanel();
+        drawWheel(0);
+        saveToStorage();
+        closeEditor();
+    }
+
+    // ============================================================
+    //  抽獎按鈕拖拽（tap 不拖拽 → 正常觸發抽獎）
+    // ============================================================
+    let btnDragData = null;
+    let suppressClickUntil = 0;
+
+    function initBtnDrag() {
+        const btn = spinBtn;
+
+        const savedPos = loadBtnPosition();
+        if (savedPos) {
+            btn.style.left = savedPos.left + 'px';
+            btn.style.top = savedPos.top + 'px';
+            btn.style.right = 'auto';
+            btn.style.bottom = 'auto';
+            btn.style.transform = 'none';
+        } else {
+            // 預設底部中央：用像素定位（不用 translateX），
+            // 避免 hover/active 的 scale 覆蓋 transform 造成跳動
+            btn.style.left = Math.round((window.innerWidth - btn.offsetWidth) / 2) + 'px';
+            btn.style.bottom = '32px';
+            btn.style.right = 'auto';
+            btn.style.top = 'auto';
+            btn.style.transform = 'none';
+        }
+
+        function onStart(e) {
+            if (isSpinning) return;
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = btn.getBoundingClientRect();
+            btnDragData = {
+                offsetX: touch.clientX - rect.left,
+                offsetY: touch.clientY - rect.top,
+                startLeft: parseFloat(btn.style.left) || 0,
+                startTop: parseFloat(btn.style.top) || 0,
+                isCentered: !!(btn.style.transform && btn.style.transform.indexOf('translateX') !== -1),
+                startX: touch.clientX,
+                startY: touch.clientY,
+                moved: false
+            };
+
+            if (btnDragData.isCentered) {
+                const rect2 = btn.getBoundingClientRect();
+                btn.style.left = rect2.left + 'px';
+                btn.style.top = rect2.top + 'px';
+                btn.style.right = 'auto';
+                btn.style.bottom = 'auto';
+                btn.style.transform = 'none';
+                btnDragData.startLeft = rect2.left;
+                btnDragData.startTop = rect2.top;
+            }
+
+            btn.style.cursor = 'grabbing';
+        }
+
+        function onMove(e) {
+            if (!btnDragData || isSpinning) return;
+            const touch = e.touches ? e.touches[0] : e;
+
+            if (!btnDragData.moved) {
+                const dx = touch.clientX - btnDragData.startX;
+                const dy = touch.clientY - btnDragData.startY;
+                if (Math.hypot(dx, dy) < 8) return; // 未達拖拽閾值：視為點擊
+                btnDragData.moved = true;
+            }
+            e.preventDefault();
+
+            let x = touch.clientX - btnDragData.offsetX;
+            let y = touch.clientY - btnDragData.offsetY;
+
+            // 用各自尺寸做夾取（寬→X、高→Y），否則向下會被誤限
+            const btnW = btn.offsetWidth || 80;
+            const btnH = btn.offsetHeight || 56;
+            const margin = 12;
+            x = Math.max(margin, Math.min(window.innerWidth - btnW - margin, x));
+            y = Math.max(margin, Math.min(window.innerHeight - btnH - margin, y));
+
+            btn.style.left = x + 'px';
+            btn.style.top = y + 'px';
+            btn.style.right = 'auto';
+            btn.style.bottom = 'auto';
+            btn.style.transform = 'none';
+        }
+
+        function onEnd() {
+            if (btnDragData) {
+                if (btnDragData.moved) {
+                    suppressClickUntil = Date.now() + 350;
+                }
+                const left = parseFloat(btn.style.left);
+                const top = parseFloat(btn.style.top);
+                if (!isNaN(left) && !isNaN(top)) {
+                    saveBtnPosition(left, top);
+                }
+                btnDragData = null;
+                btn.style.cursor = 'grab';
+            }
+        }
+
+        btn.addEventListener('mousedown', onStart);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+
+        btn.addEventListener('touchstart', onStart, { passive: true });
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd, { passive: false });
+    }
+
+    // ============================================================
+    //  結果卡片拖拽
+    // ============================================================
+    let dragData = null;
+
+    function initResultDrag() {
+        const card = resultCard;
+
+        function onStart(e) {
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = card.getBoundingClientRect();
+            dragData = {
+                offsetX: touch.clientX - rect.left,
+                offsetY: touch.clientY - rect.top
+            };
+            card.style.cursor = 'grabbing';
+            e.preventDefault();
+        }
+
+        function onMove(e) {
+            if (!dragData) return;
+            const touch = e.touches ? e.touches[0] : e;
+            let x = touch.clientX - dragData.offsetX;
+            let y = touch.clientY - dragData.offsetY;
+
+            const rect = card.getBoundingClientRect();
+            const maxX = window.innerWidth - rect.width;
+            const maxY = window.innerHeight - rect.height;
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            card.style.left = x + 'px';
+            card.style.right = 'auto';
+            card.style.top = y + 'px';
+            card.style.bottom = 'auto';
+            card.style.transform = 'none';
+
+            e.preventDefault();
+        }
+
+        function onEnd() {
+            if (dragData) {
+                const left = parseFloat(card.style.left);
+                const top = parseFloat(card.style.top);
+                if (!isNaN(left) && !isNaN(top)) {
+                    saveCardPosition(left, top);
+                }
+            }
+            dragData = null;
+            card.style.cursor = 'grab';
+        }
+
+        card.addEventListener('mousedown', onStart);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+
+        card.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd, { passive: false });
+    }
+
+    // ============================================================
+    //  輪盤縮放 / 移動（拖拽移動、滾輪或雙指縮放、雙擊復位）
+    // ============================================================
+    const wheelWrapper = canvas.parentElement;
+    let wheelX = 0;
+    let wheelY = 0;
+    let wheelScale = 1;
+
+    function loadWheelTransform() {
+        try {
+            const x = localStorage.getItem('wheel_x');
+            const y = localStorage.getItem('wheel_y');
+            const s = localStorage.getItem('wheel_s');
+            if (x !== null && y !== null && s !== null) {
+                wheelX = parseFloat(x) || 0;
+                wheelY = parseFloat(y) || 0;
+                wheelScale = parseFloat(s) || 1;
+            }
+        } catch (e) {}
+    }
+
+    function saveWheelTransform() {
+        try {
+            localStorage.setItem('wheel_x', wheelX);
+            localStorage.setItem('wheel_y', wheelY);
+            localStorage.setItem('wheel_s', wheelScale);
+        } catch (e) {}
+    }
+
+    function applyWheelTransform() {
+        wheelWrapper.style.transform = 'translate(' + wheelX + 'px, ' + wheelY + 'px) scale(' + wheelScale + ')';
+    }
+
+    function resetWheelTransform() {
+        wheelX = 0;
+        wheelY = 0;
+        wheelScale = 1;
+        applyWheelTransform();
+        saveWheelTransform();
+    }
+
+    function initWheelManipulate() {
+        loadWheelTransform();
+        applyWheelTransform();
+
+        let drag = null;
+        let pinch = null;
+
+        wheelWrapper.addEventListener('pointerdown', function (e) {
+            if (pinch) return;
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            drag = {
+                startX: e.clientX,
+                startY: e.clientY,
+                baseX: wheelX,
+                baseY: wheelY,
+                id: e.pointerId,
+                moved: false
+            };
+            wheelWrapper.classList.add('dragging');
+            try { wheelWrapper.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        wheelWrapper.addEventListener('pointermove', function (e) {
+            if (pinch) return;
+            if (drag && e.pointerId === drag.id) {
+                const dx = e.clientX - drag.startX;
+                const dy = e.clientY - drag.startY;
+                if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
+                if (drag.moved) {
+                    wheelX = drag.baseX + dx;
+                    wheelY = drag.baseY + dy;
+                    applyWheelTransform();
+                }
+            }
+        });
+
+        function endDrag(e) {
+            if (drag && e.pointerId === drag.id) {
+                if (drag.moved) saveWheelTransform();
+                drag = null;
+                wheelWrapper.classList.remove('dragging');
+            }
+        }
+        wheelWrapper.addEventListener('pointerup', endDrag);
+        wheelWrapper.addEventListener('pointercancel', endDrag);
+
+        // 滑鼠滾輪縮放（0.5x – 1.8x）
+        wheelWrapper.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.08 : 0.925;
+            wheelScale = Math.min(1.8, Math.max(0.5, wheelScale * factor));
+            applyWheelTransform();
+            saveWheelTransform();
+        }, { passive: false });
+
+        // 觸控雙指縮放
+        wheelWrapper.addEventListener('touchstart', function (e) {
+            if (e.touches.length === 2) {
+                drag = null;
+                const t0 = e.touches[0];
+                const t1 = e.touches[1];
+                pinch = {
+                    dist: Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY),
+                    baseScale: wheelScale
+                };
+            }
+        }, { passive: true });
+
+        wheelWrapper.addEventListener('touchmove', function (e) {
+            if (pinch && e.touches.length === 2) {
+                e.preventDefault();
+                const t0 = e.touches[0];
+                const t1 = e.touches[1];
+                const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                if (pinch.dist > 0) {
+                    wheelScale = Math.min(1.8, Math.max(0.5, pinch.baseScale * (dist / pinch.dist)));
+                    applyWheelTransform();
+                }
+            }
+        }, { passive: false });
+
+        function endTouch() {
+            if (pinch) {
+                saveWheelTransform();
+                pinch = null;
+            }
+        }
+        wheelWrapper.addEventListener('touchend', endTouch);
+        wheelWrapper.addEventListener('touchcancel', endTouch);
+
+        // 雙擊復位
+        wheelWrapper.addEventListener('dblclick', function () {
+            resetWheelTransform();
+        });
+    }
+
+    // ============================================================
+    //  結果卡片預設位置（緊貼輪盤右側，可拖拽記住位置）
+    // ============================================================
+    function loadCardPosition() {
+        try {
+            const left = localStorage.getItem('wheel_card_left');
+            const top = localStorage.getItem('wheel_card_top');
+            if (left !== null && top !== null) {
+                return { left: parseFloat(left), top: parseFloat(top) };
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function saveCardPosition(left, top) {
+        try {
+            localStorage.setItem('wheel_card_left', left);
+            localStorage.setItem('wheel_card_top', top);
+        } catch (e) {}
+    }
+
+    function placeResultCard() {
+        const saved = loadCardPosition();
+        if (saved) {
+            resultCard.style.left = saved.left + 'px';
+            resultCard.style.top = saved.top + 'px';
+            resultCard.style.right = 'auto';
+            resultCard.style.bottom = 'auto';
+            resultCard.style.transform = 'none';
+            return;
+        }
+        const rect = wheelWrapper.getBoundingClientRect();
+        const cardW = resultCard.offsetWidth || 120;
+        const gap = 28;
+        const left = rect.right + gap;
+        const maxLeft = window.innerWidth - cardW - 12;
+        if (left <= maxLeft) {
+            // 空間足夠：卡片左緣固定於輪盤右側，向右伸展
+            resultCard.style.left = left + 'px';
+            resultCard.style.top = '24px';
+            resultCard.style.right = 'auto';
+            resultCard.style.bottom = 'auto';
+            resultCard.style.transform = 'none';
+        } else {
+            // 空間不足（手機）：改為固定右緣貼邊，向左伸展
+            resultCard.style.left = 'auto';
+            resultCard.style.top = '14px';
+            resultCard.style.right = '12px';
+            resultCard.style.bottom = 'auto';
+            resultCard.style.transform = 'none';
+        }
+    }
+
+    // ---- 初始化輪盤尺寸 ----
+    // 注意：用 offsetWidth/offsetHeight（不含 transform），否則縮放後畫布會溢出
+    function resizeCanvas() {
+        const wrapper = canvas.parentElement;
+        const size = Math.min(wrapper.offsetWidth, wrapper.offsetHeight) - 6;
+        canvas.style.width = size + 'px';
+        canvas.style.height = size + 'px';
+    }
+
+    // ---- 全螢幕 ----
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(function () {});
+            }
+        } else if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+
+    // ---- 初始化 ----
+    function init() {
+        const hasData = loadFromStorage();
+
+        if (hasData && students.length > 0) {
+            generateColorMap(students.length);
+            drawWheel(0);
+            updateDrawnPanel();
+
+            if (!repeatAllowed) {
+                const remaining = students.filter(function (_, i) {
+                    return drawnHistory.indexOf(i) === -1;
+                }).length;
+                if (remaining === 0 && students.length > 0) {
+                    isAllDone = true;
+                    spinBtn.classList.add('reset-mode');
+                    spinBtn.textContent = '重置';
+                    completeOverlay.classList.add('active');
+                    resultCard.innerHTML = '<div class="empty-state">🎉 全部完成！</div>';
+                }
+            }
+        } else {
+            students = [
+                { id: 1, name: 'Anna' },
+                { id: 2, name: 'Ben' },
+                { id: 3, name: 'David' },
+                { id: 4, name: 'Fanny' },
+                { id: 5, name: 'George' },
+                { id: 6, name: 'Henry' },
+                { id: 7, name: 'John' },
+                { id: 8, name: 'Mary' }
+            ];
+            generateColorMap(students.length);
+            drawnHistory = [];
+            drawWheel(0);
+            updateDrawnPanel();
+            saveToStorage();
+        }
+
+        // ---- 事件綁定 ----
+        spinBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (Date.now() < suppressClickUntil) return;
+            if (isAllDone) {
+                resetAll();
+            } else {
+                performSpin();
+            }
+        });
+
+        settingsBtn.addEventListener('click', openEditor);
+
+        soundBtn.addEventListener('click', toggleSound);
+        listBtn.addEventListener('click', togglePanel);
+        undoBtn.addEventListener('click', undoLastDraw);
+        clearBtn.addEventListener('click', clearDrawn);
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        setRepeat.addEventListener('change', function () {
+            repeatAllowed = setRepeat.checked;
+            try { localStorage.setItem('wheel_repeat', String(repeatAllowed)); } catch (e) {}
+            if (repeatAllowed && isAllDone) {
+                isAllDone = false;
+                completeOverlay.classList.remove('active');
+                spinBtn.classList.remove('reset-mode');
+                spinBtn.textContent = '開始';
+            }
+        });
+
+        modalCancel.addEventListener('click', closeEditor);
+        modalSave.addEventListener('click', saveStudentList);
+
+        modalOverlay.addEventListener('click', function (e) {
+            if (e.target === modalOverlay) closeEditor();
+        });
+
+        studentInput.addEventListener('input', updatePreviewCount);
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
+                closeEditor();
+                return;
+            }
+            if (modalOverlay.classList.contains('active')) return;
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                spinBtn.click();
+            } else if (e.key === 'r' || e.key === 'R') {
+                if (isAllDone || drawnHistory.length > 0) {
+                    resetAll();
+                }
+            }
+        });
+
+        // 首次觸碰解鎖音頻（iOS 需要）
+        document.addEventListener('pointerdown', initAudio, { once: true });
+        document.addEventListener('touchstart', initAudio, { once: true });
+
+        // ---- 初始化拖拽 / 輪盤操作 ----
+        initResultDrag();
+        initBtnDrag();
+        initWheelManipulate();
+
+        resizeCanvas();
+        placeResultCard();
+        window.addEventListener('resize', function () {
+            resizeCanvas();
+            placeResultCard();
+        });
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.getVoices();
+        }
+
+        // 初始 UI 狀態
+        spinBtn.textContent = isAllDone ? '重置' : '開始';
+        soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+        soundBtn.classList.toggle('muted', !soundEnabled);
+        setRepeat.checked = repeatAllowed;
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        init();
+    } else {
+        document.addEventListener('DOMContentLoaded', init);
+    }
+})();
+
+</script>
+</body>
+</html>
